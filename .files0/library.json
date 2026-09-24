@@ -1,0 +1,12 @@
+{
+  "links": [
+    "/Users/doki/main/contextor/prototype/workspace.txt",
+    "/Users/doki/main/contextor/prototype/schema0.txt",
+    "/Users/doki/main/contextor/prototype/wiring_logic.txt",
+    "/Users/doki/main/contextor/prototype/wiring_highside.txt"
+  ],
+  "hidden": [
+    "hello.graph",
+    "note3.txt"
+  ]
+}

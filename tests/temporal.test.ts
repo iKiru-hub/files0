@@ -61,3 +61,25 @@ test('a tall independent note does not stretch the lanes of other components', (
   const bottom=Math.max(...['a','b','c'].map(id=>p.get(id)!.y+80));
   assert.ok(p.get('tall')!.y-bottom>=48);
 });
+
+test('competing fork families stay contiguous even with interleaved declarations', () => {
+  const graph=compile('@root\n#to p\n#to q\n@p\n@q\n@a\n#from p\n@x\n#from q\n@b\n#from p\n@y\n#from q\n@c\n#from p\n@z\n#from q').graph;
+  const sizes=new Map(graph.nodes.map(n=>[n.id,{width:100,height:n.id==='b'?180:80}]));
+  const p=temporalLayout(graph,sizes);
+  const column=['a','b','c','x','y','z'].sort((a,b)=>p.get(a)!.y-p.get(b)!.y);
+  const families=column.map(id=>'abc'.includes(id)?'p':'q');
+  assert.ok(families.join('')==='pppqqq' || families.join('')==='qqqppp');
+  for(const ids of [['a','b','c'],['x','y','z']]) {
+    ids.sort((a,b)=>p.get(a)!.y-p.get(b)!.y);
+    assert.equal(new Set(ids.map(id=>p.get(id)!.x)).size,1);
+    for(let i=1;i<ids.length;i++) assert.equal(p.get(ids[i])!.y-p.get(ids[i-1])!.y-sizes.get(ids[i-1])!.height,56);
+  }
+});
+
+test('a tall note elsewhere in the same timeline does not stretch a sibling list', () => {
+  const graph=compile('@root\n#to a\n#to b\n#to c\n@a\n#to tall\n@b\n@c\n@tall').graph;
+  const sizes=new Map(graph.nodes.map(n=>[n.id,{width:100,height:n.id==='tall'?700:80}]));
+  const p=temporalLayout(graph,sizes), ids=['a','b','c'].sort((a,b)=>p.get(a)!.y-p.get(b)!.y);
+  assert.equal(p.get(ids[1])!.y-p.get(ids[0])!.y,136);
+  assert.equal(p.get(ids[2])!.y-p.get(ids[1])!.y,136);
+});
