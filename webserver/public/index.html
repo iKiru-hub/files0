@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f5f0">
+  <title>files0 · plain text, connected</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%232e4439'/%3E%3Cpath d='M10 13h9v7h-9zm13 10h7v7h-7zM19 17h7v6' fill='none' stroke='%23f6f5f0' stroke-width='2'/%3E%3C/svg%3E">
+  <script src="/appearance.js"></script>
+  <link rel="stylesheet" href="/katex/katex.min.css">
+  <link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <button id="home-button" class="brand" aria-label="files0 — all files"><svg viewBox="0 0 28 28" width="26" height="26" aria-hidden="true"><rect x="3" y="4" width="9" height="7" rx="2"/><rect x="17" y="17" width="8" height="7" rx="2"/><path d="M12 7.5h9V17"/></svg><span>files<span class="brand-zero">0</span></span></button>
+    <span class="header-divider"></span><span id="breadcrumb">your thoughts, connected</span>
+    <div class="header-actions"><span id="connection" class="connection" role="status"><i></i><span>Connecting</span></span><button id="time-button" class="quiet-button" aria-pressed="false" title="Temporal view (T): time flows left to right" hidden>Time</button><button id="zen-button" class="quiet-button" aria-pressed="false" title="Zen view — hide controls (Z); Escape to exit" hidden>Zen</button><button id="source-button" class="quiet-button" hidden>Source <span aria-hidden="true">↗</span></button><button id="theme-button" class="quiet-button" aria-label="Toggle dark mode" aria-pressed="false">Dark</button><button id="help-button" class="icon-button" aria-label="Language and keyboard help">?</button></div>
+  </header>
+  <main id="home">
+    <div class="eyebrow"><span class="tiny-line"></span>A SMALL SPACE FOR CONNECTED THINKING</div>
+    <h1>Plain text.<br><span>A little perspective.</span></h1>
+    <p class="intro">Write in your editor. Save your file.<br>Let the connections take shape.</p>
+    <div class="width-preference"><label for="note-width">Note width</label> <input id="note-width" type="number" min="80" max="480" step="1" placeholder="From file settings" aria-describedby="width-hint"> <span>px</span> <button id="reset-note-width" class="quiet-button">Reset</button><span id="width-hint">80–480 · saved in this browser</span></div>
+    <div class="collection-heading"><h2>Your files <span id="file-count"></span></h2><div class="collection-actions"><span class="mono">.txt / .graph</span><button id="add-file" class="icon-button" aria-label="Add a file from disk" title="Link a file from any folder">+</button></div></div>
+    <p id="library-status" class="directory-note" role="status"></p>
+    <div id="file-list" class="file-list" aria-live="polite"></div>
+    <div class="home-bottom"><div><span class="step">01</span> Open a file</div><span class="step-arrow">→</span><div><span class="step">02</span> Edit in Neovim</div><span class="step-arrow">→</span><div><span class="step">03</span> Save & see</div></div>
+    <p class="directory-note">Watching <code id="directory">vsfiles/</code></p>
+  </main>
+  <section id="workspace" hidden aria-label="Graph workspace">
+    <div class="workspace-heading"><button id="files-button" class="quiet-button">← All files</button><div id="graph-summary" class="mono"></div></div>
+    <div id="viewport" tabindex="0" role="region" aria-label="Dependency graph. Drag the background to pan, scroll to zoom. Use H J K L to pan. Press F to fit.">
+      <div id="world"><svg id="edges" aria-label="Connections"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="currentColor" stroke-width="1.4"/></marker><marker id="diamond" viewBox="0 0 14 12" refX="13" refY="6" markerWidth="14" markerHeight="12" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 6 L7 1 L13 6 L7 11 Z" fill="#f6f5f0" stroke="currentColor" stroke-width="1.2"/></marker><marker id="triangle" viewBox="0 0 14 14" refX="13" refY="7" markerWidth="14" markerHeight="14" orient="auto" markerUnits="userSpaceOnUse"><path d="M1 1 L13 7 L1 13 Z" fill="#f6f5f0" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></marker></defs><g id="edge-paths"></g></svg><div id="nodes"></div></div>
+      <div id="empty-graph" hidden><span class="empty-glyph">@</span><h2>A blank page is a good start.</h2><p>Add <code>@your-first-note</code> to this file, then save.</p></div>
+    </div>
+    <div id="diagnostics" role="alert" hidden></div>
+    <footer class="graph-footer"><div class="save-state"><span id="save-indicator"></span><span id="save-status" aria-live="polite">Waiting for file</span></div><div class="canvas-controls"><label class="font-control" for="font-size">Text <select id="font-size" aria-label="Note font size"><option value="10">10 px</option><option value="12">12 px</option><option value="14">14 px</option><option value="16">16 px</option><option value="18">18 px</option></select></label><span></span><button id="zoom-out" aria-label="Zoom out">−</button><button id="zoom-reset" aria-label="Reset zoom to 100%">100%</button><button id="zoom-in" aria-label="Zoom in">+</button><span></span><button id="fit" title="Fit graph (F)">Fit <span aria-hidden="true">⤢</span></button></div><span class="canvas-hint">drag to move · scroll to zoom</span></footer>
+  </section>
+  <aside id="source-panel" hidden aria-label="File source"><div class="panel-heading"><div><span class="eyebrow">SOURCE FILE</span><h2 id="source-name"></h2></div><button id="close-source" class="icon-button" aria-label="Close source">×</button></div><p class="source-caption">Edited in your terminal. Reflected here.</p><pre id="source-code" tabindex="0"></pre><div class="terminal-command"><span class="eyebrow">OPEN IN YOUR TERMINAL</span><code id="editor-command"></code><button id="copy-command" class="quiet-button">Copy command</button></div></aside>
+  <dialog id="add-file-dialog" aria-labelledby="add-file-heading">
+    <div class="panel-heading"><span class="eyebrow">YOUR FILES, ANYWHERE</span><button id="close-add-file" class="icon-button" aria-label="Close add file">×</button></div>
+    <h2 id="add-file-heading">Bring a file into view.</h2>
+    <p>The original stays where it is. Every save updates the graph, and this library remembers it for next time.</p>
+    <button id="choose-file" class="choose-file">Choose file…</button>
+    <form id="add-file-form"><label for="file-path">Or enter its full path</label><input id="file-path" name="path" type="text" placeholder="/Users/you/notes/ideas.txt" autocomplete="off" spellcheck="false" required><button id="link-file" class="choose-file" type="submit">Add to library</button></form>
+    <p id="add-file-error" role="alert" hidden></p>
+    <p>Any UTF-8 text file, up to 1 MB. Its content uses the files0 note language.</p>
+  </dialog>
+  <dialog id="help"><div class="panel-heading"><span class="eyebrow">A LITTLE LANGUAGE</span><button id="close-help" class="icon-button" aria-label="Close help">×</button></div><h2>Just enough structure.</h2><p>Write a file in the watched directory. Every save updates the graph.</p><pre>@idea
+A thought worth keeping.
+#to @next
+
+@next
+Where it might lead.
+#border none
+
+@class::vehicle
+-- wheels
+-- move()
+
+@class::car
+#inherit @vehicle</pre><dl><dt>@name</dt><dd>Start a borderless text note.</dd><dt>#to @name</dt><dd>Point to another note.</dd><dt>#from @source</dt><dd>Source → this note.</dd><dt>#use @target</dt><dd>Point to a target with a hollow triangle.</dd><dt>#color 222c3a</dt><dd>A thicker border in a six-digit hex color.</dd><dt>#border none</dt><dd>Let the text stand alone.</dd><dt>#border</dt><dd>Show a rounded border (rectangle for classes).</dd><dt>-- attribute</dt><dd>Add a row to a class.</dd><dt>#inherit @parent</dt><dd>Parent → child; hollow diamond at child.</dd><dt>\(x^2 + \frac{1}{2}\)</dt><dd>Inline LaTeX math inside note text.</dd><dt>*text* / **text**</dt><dd>Italic / bold text inside notes.</dd><dt>// comment</dt><dd>A line for you, hidden from the graph.</dd></dl><p class="help-foot"><kbd>Ctrl+H</kbd> home · <kbd>Ctrl+P / Ctrl+N</kbd> file history<br><kbd>J / K</kbd> choose file on home · <kbd>Enter</kbd> open<br><kbd>H J K L</kbd> pan (Shift: faster) · <kbd>T</kbd> temporal · <kbd>Z</kbd> zen · <kbd>Esc</kbd> exit zen · <kbd>F</kbd> fit <kbd>+</kbd> <kbd>−</kbd> zoom · Drag notes to arrange them.<br>Escape a leading directive with <code>\</code> to show it as text.</p></dialog>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "name": "files0",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Plain text, quietly connected. A local, live graph for your editor.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc && node scripts/build.mjs",
+    "start": "npm run build && node dist/server.js",
+    "dev": "node scripts/dev.mjs",
+    "check": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:browser": "playwright test"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "katex": "^0.18.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.18.0",
+    "esbuild": "^0.25.9",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}

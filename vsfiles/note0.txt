@@ -1,0 +1,18 @@
+@text1
+this is the text of the first text
+
+@class::vehicle
+-- wheels
+-- steering wheel
+
+@class::car
+-- tires
+-- doores
+#inherit vehicle
+
+@descr1
+cars are vehicles
+#to car
+
+@brands
+types of cars

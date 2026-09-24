@@ -1,0 +1,40 @@
+
+@language
+the syntax used to interface the file text with the rendered structure
+
+@file
+it contains expressions of the language such to compose a system of interest
+#use @language
+#to @compiler
+
+@compiler
+parses and updated the code to render in the web-browser
+#to @webserver
+
+@webserver
+it receives the code from the compiler
+
+@user
+it experiences the writing and reading
+#from @webserver
+#color 002344
+
+@brain
+it reasons about the experience
+#from @user
+#color c02344
+
+@nature
+it is enriched by the user's experience
+#from @user
+#color 40cc44
+
+@god
+it is
+#color 4ccc4c
+
+@elves
+magical creatures
+#from @nature
+#inherit @god
+

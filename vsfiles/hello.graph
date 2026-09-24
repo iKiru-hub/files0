@@ -1,0 +1,21 @@
+// A tiny map of the workflow. Edit anything here, then save.
+
+@a-thought
+Start with something small.
+#border none
+#to @plain-text
+
+@plain-text
+A file. Your editor.
+Room to think.
+#to @connections
+
+@connections
+Give your ideas a name.
+Draw a line between them.
+#to @perspective
+
+@perspective
+See what takes shape.
+#border none
+

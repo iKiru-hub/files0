@@ -1,0 +1,28 @@
+
+
+@home
+homepage
+
+
+@root
+root page
+#from @home
+
+@dir
+dir page
+#from @root
+
+@file
+file page
+#from @root
+#from @dir
+#border
+
+@graph
+graph page
+#from @file
+
+
+
+
+
