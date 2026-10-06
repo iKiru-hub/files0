@@ -2,11 +2,11 @@ import type { Graph } from '../compiler.js';
 import { layout, MIN_NODE_GAP, type Point } from './layout.js';
 
 /** Longest-path time columns; cycles are condensed into a simultaneous group. */
-export function temporalLayout(graph: Graph, sizes: Map<string, { width: number; height: number }>): Map<string, Point> {
+export function temporalLayout(graph: Graph, sizes: Map<string, { width: number; height: number }>, nodeGap = MIN_NODE_GAP): Map<string, Point> {
   const temporal = { nodes: graph.nodes, edges: graph.edges.filter(e => e.kind === 'to' || e.kind === 'from') };
   const initial = layout(temporal, sizes);
   const maxWidth = Math.max(100, ...[...sizes.values()].map(s => s.width));
-  const stride = maxWidth + 80;
+  const stride = maxWidth + nodeGap + 32;
   const notes = new Map(graph.nodes.map(n => [n.id, n]));
   const adjacent = new Map(graph.nodes.map(n => [n.id, new Set<string>()]));
   const parents = new Map(graph.nodes.map(n => [n.id, [] as string[]]));
@@ -34,7 +34,7 @@ export function temporalLayout(graph: Graph, sizes: Map<string, { width: number;
     const preceding = [...times.keys()].filter(id => notes.get(id)!.line < head).sort((a, b) => notes.get(b)!.line - notes.get(a)!.line)[0];
     const offset = preceding ? times.get(preceding)! : 0;
     const centers = new Map<string, number>();
-    const gap = MIN_NODE_GAP + 8;
+    const gap = nodeGap + 8;
     const height = (id: string) => sizes.get(id)?.height || 70;
     const ordered = [...component].sort((a,b) => rank(a)-rank(b) || notes.get(a)!.line-notes.get(b)!.line);
     for (const time of [...new Set(ordered.map(rank))]) {
@@ -68,7 +68,7 @@ export function temporalLayout(graph: Graph, sizes: Map<string, { width: number;
     }
     const top = Math.min(...component.map(id => result.get(id)!.y));
     for (const id of component) result.get(id)!.y += componentY - top;
-    componentY = Math.max(...component.map(id => result.get(id)!.y + (sizes.get(id)?.height || 70))) + MIN_NODE_GAP + 8 + 16;
+    componentY = Math.max(...component.map(id => result.get(id)!.y + (sizes.get(id)?.height || 70))) + nodeGap + 8 + 16;
   }
   return result;
 }

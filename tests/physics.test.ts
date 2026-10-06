@@ -36,3 +36,11 @@ test('distant connected notes settle to a short readable edge', () => {
   const gap=p.get('b')!.x-p.get('a')!.x-100;
   assert.ok(gap>=MIN_NODE_GAP && gap<90, `edge gap ${gap}`);
 });
+
+test('box cohesion takes priority over external arrow attraction',()=>{
+  const graph=compile('@boxopen A\n@a\n#to c\n@b\n#to d\n@boxclose A\n@c\n@d').graph;
+  const boxes=new Map([['a',box(0)],['b',box(600)],['c',box(-200)],['d',box(800)]]);
+  const grouped=equilibrate(graph,boxes),plain=equilibrate({...graph,groups:undefined},boxes);
+  const distance=(p:typeof grouped)=>Math.hypot(p.get('a')!.x-p.get('b')!.x,p.get('a')!.y-p.get('b')!.y);
+  assert.ok(distance(grouped)<distance(plain)*.7);
+});

@@ -42,3 +42,68 @@ test('diagonal obstacles and crossings are detected', () => {
   assert.ok(route.points.length>2);
   for(let i=1;i<route.points.length;i++) assert.equal(hitsBox(route.points[i-1],route.points[i],box(200,200),8),false);
 });
+
+test('attribute arrows attach at measured class row centers, including self references', () => {
+  const graph=compile('@a\n#to car 1\n#to car 2\n#from car 2\n@class car\n-- first\n-- second\n#to car 1').graph;
+  const car={x:300,y:50,width:100,height:150,attributeCenters:[65,120]};
+  const routes=routeEdges(graph,new Map([['a',box(0,0)],['car',car]]));
+  assert.equal(routes.size,graph.edges.length);
+  for(const edge of graph.edges) {
+    const route=routes.get(edge.id)!;
+    const tip=edge.sourceAttribute?route.points[0]:route.points.at(-1)!;
+    const index=edge.sourceAttribute ?? edge.targetAttribute!;
+    assert.equal(tip.y,car.y+car.attributeCenters[index-1]);
+    assert.ok(tip.x<car.x || tip.x>car.x+car.width);
+  }
+});
+
+test('an obstacle detour stays compact and advances toward its destination',()=>{
+  const graph=compile('@a\n#to c\n@obstacle\n@c').graph;
+  const boxes=new Map([['a',box(0,0)],['obstacle',box(200,0)],['c',box(400,0)]]);
+  const route=routeEdges(graph,boxes).get(graph.edges[0].id)!;
+  const length=route.points.slice(1).reduce((sum,p,i)=>sum+Math.hypot(p.x-route.points[i].x,p.y-route.points[i].y),0);
+  assert.ok(length<400,`detour length ${length}`);
+  for(let i=1;i<route.points.length;i++) assert.ok(route.points[i].x>=route.points[i-1].x);
+});
+
+test('two-ended attribute routes keep exact row anchors, including self loops',()=>{
+  const graph=compile('@class a\n-- first\n-- second\n#from 1 #to @b 2\n#from 2 #to @a 1\n@class b\n-- first\n-- second\n#from @a 2 #to 1').graph;
+  const boxes=new Map([['a',{x:0,y:0,width:100,height:140,attributeCenters:[60,110]}],['b',{x:400,y:90,width:100,height:140,attributeCenters:[60,110]}]]);
+  const routes=routeEdges(graph,boxes);assert.equal(routes.size,3);
+  for(const edge of graph.edges) {
+    const points=routes.get(edge.id)!.points,a=boxes.get(edge.source)!,b=boxes.get(edge.target)!;
+    assert.equal(points[0].y,a.y+a.attributeCenters[edge.sourceAttribute!-1]);
+    assert.equal(points.at(-1)!.y,b.y+b.attributeCenters[edge.targetAttribute!-1]);
+  }
+});
+test('nearby parallel edges use separate corridors while keeping their row anchors',()=>{
+  const graph=compile('@class a\n-- first\n-- second\n#from 1 #to @b 1\n#from 2 #to @b 2\n@class b\n-- first\n-- second').graph;
+  const boxes=new Map([['a',{x:0,y:0,width:100,height:120,attributeCenters:[60,64]}],['b',{x:500,y:0,width:100,height:120,attributeCenters:[60,64]}]]);
+  const routes=[...routeEdges(graph,boxes).values()];
+  const centerY=(points:typeof routes[0]['points'])=>{
+    const i=points.findIndex((p,j)=>j>0 && Math.min(points[j-1].x,p.x)<=300 && Math.max(points[j-1].x,p.x)>=300);
+    const a=points[i-1],b=points[i];return a.y+(b.y-a.y)*(300-a.x)/(b.x-a.x);
+  };
+  assert.ok(Math.abs(centerY(routes[0].points)-centerY(routes[1].points))>=18);
+});
+test('edges avoid running close and parallel to container borders',()=>{
+  const graph=compile('@a\n#to b\n@b').graph;
+  const boxes=new Map([['a',box(0,0)],['b',box(500,0)]]);
+  const frame={x:-40,y:25,width:680,height:200};
+  const route=routeEdges(graph,boxes,[frame]).get(graph.edges[0].id)!;
+  assert.ok(route.points.length>2);
+  // The middle of the route should clear the frame's horizontal border.
+  const segment=route.points.slice(1).map((p,i)=>[route.points[i],p]).find(([a,b])=>a.x<=300 && b.x>=300)!;
+  const y=segment[0].y+(segment[1].y-segment[0].y)*(300-segment[0].x)/(segment[1].x-segment[0].x);
+  assert.ok(Math.abs(y-frame.y)>=18);
+});
+
+test('with uses straight paths when clear and bends around obstacles',()=>{
+  const graph=compile('@a\n#with c\n@c').graph;
+  const boxes=new Map([['a',box(0,0)],['c',box(400,0)]]);
+  assert.equal(routeEdges(graph,boxes).get(graph.edges[0].id)!.points.length,2);
+  boxes.set('obstacle',box(200,0));
+  const route=routeEdges(graph,boxes).get(graph.edges[0].id)!;
+  assert.ok(route.points.length>2);
+  for(let i=1;i<route.points.length;i++) assert.equal(hitsBox(route.points[i-1],route.points[i],boxes.get('obstacle')!,8),false);
+});

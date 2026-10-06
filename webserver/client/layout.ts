@@ -1,18 +1,19 @@
 import type { Graph } from '../compiler.js';
 export interface Point { x: number; y: number }
-export interface Box extends Point { width: number; height: number }
+export interface Box extends Point { width: number; height: number; attributeCenters?: number[] }
 
 export const SPAWN_RADIUS = 180;
 
-export const MIN_NODE_GAP = 48;
+export { DEFAULT_NOTE_SPACING as MIN_NODE_GAP } from './spacing.js';
+import { DEFAULT_NOTE_SPACING as MIN_NODE_GAP } from './spacing.js';
 
 /** Prefer the barycenter disk; expand outward when the disk has no free space. */
-export function spawnPosition(existing: readonly Box[], size: { width: number; height: number }, random = Math.random, anchors: readonly Box[] = existing): Point {
+export function spawnPosition(existing: readonly Box[], size: { width: number; height: number }, random = Math.random, anchors: readonly Box[] = existing, nodeGap = MIN_NODE_GAP): Point {
   const count = anchors.length || 1;
   const center = anchors.reduce((sum, box) => ({ x: sum.x + (box.x + box.width / 2) / count,
     y: sum.y + (box.y + box.height / 2) / count }), { x: 0, y: 0 });
   // Extra breathing room covers the tiny settling motion as well.
-  const gap = MIN_NODE_GAP + 4;
+  const gap = nodeGap + 4;
   const clear = (p: Point) => existing.every(box => p.x + size.width + gap <= box.x ||
     box.x + box.width + gap <= p.x || p.y + size.height + gap <= box.y || box.y + box.height + gap <= p.y);
   const point = (angle: number, distance: number) => ({ x: center.x + Math.cos(angle) * distance - size.width / 2,

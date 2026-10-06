@@ -5,7 +5,7 @@ import { createApp } from '../webserver/server.js';
 const directory = process.env.FILES0_TEST_DIRECTORY!;
 await mkdir(directory, { recursive: true });
 await rm(join(directory, '.files0-library.json'), { force: true });
-await writeFile(join(directory, 'test.txt'), '@idea\nOne small thought.\n#to next\n@next\nIt leads somewhere.\n#border none\n@class::vehicle\n-- wheels\n@class::car\n#inherit vehicle');
+await writeFile(join(directory, 'test.txt'), '@idea\nOne small thought.\n#to next\n@next\nIt leads somewhere.\n#border none\n@class vehicle\n-- wheels\n@class car\n#inherit vehicle');
 await copyFile('vsfiles/hello.graph', join(directory, 'hello.graph'));
 await writeFile(join(directory, 'constants.yaml'), 'note_width: 100px');
 const { app, store } = await createApp(directory, join(directory, 'constants.yaml'));

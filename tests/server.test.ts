@@ -96,3 +96,16 @@ test('library removal persists for local and linked files without deleting sourc
   await writeFile(local,'@changed'); await store.refresh(); assert.equal(store.list().length,0);
   await store.addPath(local); await store.addPath(linked); assert.equal(store.list().length,2);
 });
+
+test('PNG endpoint serves declared paths and image replacements update revisions', async t => {
+  const {png}=await import('./png-fixture.js');const dir=await mkdtemp(join(tmpdir(),'files0-images-'));
+  await writeFile(join(dir,'a.txt'),'@image sketch.png');await writeFile(join(dir,'sketch.png'),png());
+  const {app,store}=await createApp(dir,join(dir,'config'));const server=createServer(app);server.listen(0,'127.0.0.1');await once(server,'listening');
+  t.after(async()=>{store.close();server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));await rm(dir,{recursive:true,force:true});});
+  const base=`http://127.0.0.1:${(server.address() as {port:number}).port}`;
+  const doc=await (await fetch(base+'/api/document?file=a.txt')).json();
+  const response=await fetch(base+doc.graph.nodes[0].imageUrl);assert.equal(response.status,200);assert.match(response.headers.get('content-type')!,/image\/png/);
+  assert.equal((await fetch(base+'/api/image?file=a.txt&node=undeclared')).status,404);
+  await writeFile(join(dir,'sketch.png'),Buffer.from('invalid'));await store.refresh();
+  assert.notEqual(store.documents.get('a.txt')!.revision,doc.revision);assert.equal((await fetch(base+doc.graph.nodes[0].imageUrl)).status,400);
+});

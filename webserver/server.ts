@@ -1,4 +1,5 @@
 import express from 'express';
+import { open } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createServer } from 'node:http';
@@ -58,9 +59,28 @@ export async function createApp(directory = resolve(root, 'vsfiles'), config = r
     if (typeof name !== 'string' || !validName(name)) { res.status(400).json({ error: 'Choose a .txt or .graph file from the watched directory.' }); return; }
     const document = store.documents.get(name);
     if (!document) { res.status(404).json({ error: 'This file is no longer in the watched directory.' }); return; }
-    res.json(document);
+    res.json({ ...document, graph: { ...document.graph, nodes: document.graph.nodes.map(note => note.kind === 'image'
+      ? { ...note, imageUrl: `/api/image?file=${encodeURIComponent(name)}&node=${encodeURIComponent(note.id)}&v=${document.revision}` } : note) } });
   });
-  app.get('/api/events', (req, res) => {
+  app.get('/api/image', async (req, res) => {
+    const doc = typeof req.query.file === 'string' ? store.documents.get(req.query.file) : undefined;
+    const note = doc?.graph.nodes.find(n => n.id === req.query.node && n.kind === 'image');
+    if (!doc?.path || !note?.imagePath) { res.status(404).json({error:'Image is not referenced by an available file.'}); return; }
+    try {
+      const file = await open(resolve(dirname(doc.path), note.imagePath), 'r');
+      let bytes: Buffer;
+      try {
+        const stat = await file.stat();
+        if (!stat.isFile() || stat.size > 20*1024*1024) throw new Error('Image must be a PNG under 20 MB.');
+        bytes = await file.readFile();
+      } finally { await file.close(); }
+      if (bytes.length < 24 || !bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])) || bytes.toString('ascii',12,16) !== 'IHDR') throw new Error('Invalid PNG image.');
+      const width=bytes.readUInt32BE(16), height=bytes.readUInt32BE(20);
+      if (!width || !height || width*height > 40000000) throw new Error('PNG dimensions exceed the supported limit.');
+      res.setHeader('Cache-Control','no-cache'); res.type('png').send(bytes);
+    } catch { res.status(400).json({error:'Could not load PNG image.'}); }
+  });
+  app.get('/api/events' , (req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     res.flushHeaders();
     res.write('event: ready\ndata: {}\n\n');

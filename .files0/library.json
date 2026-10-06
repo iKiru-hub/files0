@@ -1,9 +1,8 @@
 {
   "links": [
-    "/Users/doki/main/contextor/prototype/workspace.txt",
-    "/Users/doki/main/contextor/prototype/schema0.txt",
-    "/Users/doki/main/contextor/prototype/wiring_logic.txt",
-    "/Users/doki/main/contextor/prototype/wiring_highside.txt"
+    "/Users/doki/tmp/pi_help.txt",
+    "/Users/doki/main/contextor/prototypes/prototype_2/p2_circuit.txt",
+    "/Users/doki/ycode/js/js_notes.txt"
   ],
   "hidden": [
     "hello.graph",

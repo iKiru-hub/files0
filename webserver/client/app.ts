@@ -1,4 +1,5 @@
 import { GraphView } from './graph.js';
+import { DEFAULT_NOTE_SPACING, normalizeSpacing } from './spacing.js';
 import type { DocumentSnapshot } from '../compiler.js';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -7,6 +8,36 @@ const help = $<HTMLDialogElement>('help');
 const addFileDialog = $<HTMLDialogElement>('add-file-dialog');
 const view = new GraphView($('viewport'), $('world'), $('nodes'), document.getElementById('edge-paths') as unknown as SVGGElement,
   scale => { $('zoom-reset').textContent = `${Math.round(scale * 100)}%`; });
+const spacingInput = $<HTMLInputElement>('note-spacing');
+let spacing = DEFAULT_NOTE_SPACING;
+try {
+  const saved = localStorage.getItem('files0:note-spacing');
+  if (saved !== null) spacing = normalizeSpacing(Number(saved));
+} catch {}
+function updateSpacing(value: number) {
+  spacing = normalizeSpacing(value);
+  spacingInput.value = String(spacing);
+  spacingInput.setAttribute('aria-valuetext', `${spacing} pixels preferred gap`);
+  $('spacing-value').textContent = `${spacing} px`;
+  $<HTMLButtonElement>('reset-spacing').disabled = spacing === DEFAULT_NOTE_SPACING;
+  view.setSpacing(spacing);
+  try { localStorage.setItem('files0:note-spacing', String(spacing)); } catch {}
+}
+updateSpacing(spacing);
+// Coalesce slider scrubbing; the force solver runs once after a short pause.
+let spacingTimer: ReturnType<typeof setTimeout> | undefined;
+spacingInput.addEventListener('input', () => {
+  $('spacing-value').textContent = `${spacingInput.value} px`;
+  spacingInput.setAttribute('aria-valuetext', `${spacingInput.value} pixels preferred gap`);
+  clearTimeout(spacingTimer);
+  spacingTimer = setTimeout(() => updateSpacing(Number(spacingInput.value)), 120);
+});
+spacingInput.addEventListener('change', () => {
+  clearTimeout(spacingTimer); updateSpacing(Number(spacingInput.value));
+});
+$('reset-spacing').addEventListener('click', () => {
+  clearTimeout(spacingTimer); updateSpacing(DEFAULT_NOTE_SPACING);
+});
 const noteWidth = $<HTMLInputElement>('note-width');
 let preferredWidth: number | undefined;
 try {

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { watch, type FSWatcher, constants } from 'node:fs';
-import { open, readdir, readFile, realpath, mkdir, writeFile, rename } from 'node:fs/promises';
-import { basename, join, dirname, isAbsolute } from 'node:path';
+import { open, stat, readdir, readFile, realpath, mkdir, writeFile, rename } from 'node:fs/promises';
+import { basename, join, dirname, isAbsolute, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { compile, type DocumentSnapshot } from './compiler.js';
 
@@ -147,10 +147,14 @@ export class DocumentStore extends EventEmitter {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT' && !this.linked.has(name)) { const old = this.documents.get(name); if (old) next.set(name, old); continue; }
         problem = (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'Linked file is missing. Restore it at its original path to resume live updates.' : error instanceof Error ? error.message : 'Could not read this file.';
       }
-      const revision = createHash('sha256').update(source + '\0' + width + '\0' + problem).digest('hex').slice(0, 16);
+      const compiled = compile(source);
+      const imageVersions = await Promise.all(compiled.graph.nodes.filter(n => n.imagePath).map(async n => {
+        try { const info = await stat(resolve(dirname(filePath), n.imagePath!)); return `${info.mtimeMs}:${info.ctimeMs}:${info.size}`; }
+        catch { return 'missing'; }
+      }));
+      const revision = createHash('sha256').update(source + '\0' + width + '\0' + problem + '\0' + imageVersions.join('|')).digest('hex').slice(0, 16);
       const old = this.documents.get(name);
       if (old?.revision === revision) { next.set(name, old); continue; }
-      const compiled = compile(source);
       if (problem) compiled.diagnostics.push({ line: 0, message: problem });
       next.set(name, { name, path: filePath, displayName: basename(filePath), source, width, revision, ...compiled });
     }

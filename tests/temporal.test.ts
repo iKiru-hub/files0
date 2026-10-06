@@ -83,3 +83,16 @@ test('a tall note elsewhere in the same timeline does not stretch a sibling list
   assert.equal(p.get(ids[1])!.y-p.get(ids[0])!.y,136);
   assert.equal(p.get(ids[2])!.y-p.get(ids[1])!.y,136);
 });
+
+test('row-to-row dependencies advance time in both declaration forms',()=>{
+  const graph=compile('@class a\n-- first\n#from 1 #to @b 1\n@class b\n-- first\n@class c\n-- first\n#from @b 1 #to 1').graph;
+  const sizes=new Map(graph.nodes.map(n=>[n.id,{width:100,height:80}]));
+  const p=temporalLayout(graph,sizes);
+  assert.ok(p.get('a')!.x<p.get('b')!.x && p.get('b')!.x<p.get('c')!.x);
+});
+
+test('with edges add no temporal ordering',()=>{
+  const plain=compile('@a\n@b').graph,linked=compile('@a\n#with b\n@b').graph;
+  const sizes=new Map(plain.nodes.map(n=>[n.id,{width:100,height:80}]));
+  assert.deepEqual(temporalLayout(linked,sizes),temporalLayout(plain,sizes));
+});

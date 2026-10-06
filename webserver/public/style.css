@@ -19,7 +19,7 @@
   --grid:#68765a26;
   --warning-bg:#fff4db;
   --warning-ink:#735017;
-  --note-font-size:10px;
+  --note-font-size:12px;
   color-scheme:light;
 }
 * {
@@ -338,6 +338,8 @@ h1 span {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 #edge-paths path.inherit {
   stroke: var(--outline);
@@ -354,10 +356,11 @@ h1 span {
   width: var(--note-width,100px);
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 7px;
-  box-shadow: 0 2px 5px #24332604;
+  border-radius: 10px;
+  box-shadow: none;
   cursor: grab;
-  padding: 12px 7px;
+  --note-padding:clamp(8px, calc(var(--note-width, 100px) * .06), 16px);
+  padding: 16px var(--note-padding);
   color: var(--muted);
   overflow-wrap: anywhere;
   font-size: 11px;
@@ -380,22 +383,23 @@ h1 span {
   box-shadow: 0 8px 22px #32452610;
 }
 .node-title {
+  text-align: center;
   font-family:
     ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
   font-size: 10px;
-  font-weight: 550;
+  font-weight: 600;
   line-height: 1.55;
   color: var(--muted);
 }
 .node-body {
   white-space: pre-wrap;
-  margin-top: 7px;
+  margin-top: 10px;
   color: var(--muted);
   font-size: 10px;
-  line-height: 1.65;
+  line-height: 1.9;
 }
 .node.rectangle {
   border-radius: 1px;
@@ -404,15 +408,16 @@ h1 span {
   padding: 0;
 }
 .node.class .node-title {
-  padding: 9px 10px;
+  padding: 13px var(--note-padding);
   background: var(--surface);
 }
 .node.class .node-body {
-  padding: 0 7px 9px;
+  padding: 0 var(--note-padding) 14px;
 }
 .attribute {
   border-top: 1px solid var(--line);
-  padding: 6px 9px;
+  padding: 9px var(--note-padding);
+  line-height: 1.75;
   font-family:
     ui-monospace,
     SFMono-Regular,
@@ -438,7 +443,7 @@ h1 span {
   border-color: transparent;
 }
 .node.entering {
-  animation: appear .5s ease-out;
+  animation: appear .28s ease-out;
 }
 @keyframes appear {
   from {
@@ -667,7 +672,7 @@ dialog {
   box-shadow: 0 20px 80px #30402017;
 }
 dialog::backdrop {
-  background: var(--surface);
+  background: #18221b33;
   backdrop-filter: blur(3px);
 }
 dialog h2 {
@@ -867,6 +872,7 @@ select:focus-visible { outline:2px solid var(--outline); outline-offset:2px; }
 .node.colored:not(.none) .attribute { border-color:var(--note-color); }
 
 .node-body { color:var(--ink); font-weight:500; }
+.node-body:empty { display:none; }
 .inline-math { white-space:normal; }
 .inline-math .katex { font-size:1.1em; }
 .math-invalid { text-decoration:underline dotted; text-underline-offset:3px; }
@@ -883,3 +889,30 @@ select:focus-visible { outline:2px solid var(--outline); outline-offset:2px; }
 .remove-file:hover { color:var(--ink); background:var(--soft); }
 
 #viewport:focus-visible { outline:none; }
+
+.node.image { padding:0; }
+.node.image .node-title { padding:6px 0; }
+.note-image { display:block; width:100%; height:auto; pointer-events:none; }
+.node.image .node-body { margin:8px 0 0; }
+.image-status { padding:16px; font-size:12px; }
+.image-resize { position:absolute; right:-8px; bottom:-8px; width:24px; height:24px; border-radius:50%; background:var(--surface); color:var(--ink); border:1px solid var(--outline); cursor:nwse-resize; opacity:.35; }
+.node.image:hover .image-resize, .image-resize:focus-visible { opacity:1; }
+
+#groups { position:absolute; left:0; top:0; pointer-events:none; }
+.graph-box { position:absolute; left:0; top:0; border:1px solid var(--line); border-radius:16px; background:rgba(100,125,105,.025); box-sizing:border-box; }
+.box-header { position:absolute; bottom:calc(100% + 10px); left:0; width:100%; max-width:320px; color:var(--muted); white-space:pre-wrap; overflow-wrap:anywhere; }
+.box-title { font:550 11px ui-monospace,monospace; color:var(--ink); }
+.box-subtitle, .box-footer { font-size:11px; line-height:1.8; white-space:pre-wrap; overflow-wrap:anywhere; }
+.box-subtitle { margin-top:4px; }
+.box-footer { position:absolute; top:calc(100% + 10px); left:0; width:100%; max-width:320px; color:var(--muted); }
+
+.box-header, .box-footer { width:max-content; max-width:160px; }
+
+/* Display preferences sit beside text size and zoom, without changing either. */
+.spacing-control { display:flex; align-items:center; gap:7px; padding:0 6px; font-size:10px; white-space:nowrap; color:var(--muted); }
+.spacing-control input { width:85px; accent-color:var(--ink); cursor:pointer; }
+.spacing-control output { min-width:36px; font-variant-numeric:tabular-nums; }
+.spacing-control button:disabled { opacity:.35; cursor:default; }
+.spacing-control input:focus-visible { outline:2px solid var(--ink); outline-offset:4px; border-radius:5px; }
+@media(max-width:1100px) { .canvas-hint { display:none; } .graph-footer { gap:12px; } }
+@media(max-width:700px) { .canvas-controls { flex-wrap:wrap; justify-content:center; max-width:100%; } .spacing-control { min-height:34px; } }

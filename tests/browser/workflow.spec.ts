@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { writeFile, rename, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 const directory = process.env.FILES0_TEST_DIRECTORY!;
-const original = '@idea\nOne small thought.\n#to next\n@next\nIt leads somewhere.\n#border none\n@class::vehicle\n-- wheels\n@class::car\n#inherit vehicle';
+const original = '@idea\nOne small thought.\n#to next\n@next\nIt leads somewhere.\n#border none\n@class vehicle\n-- wheels\n@class car\n#inherit vehicle';
 test.beforeEach(async () => { await writeFile(join(directory, 'test.txt'), original); });
 
 test('file picker, source, classes, borderless notes, inheritance and navigation', async ({ page }) => {
@@ -15,7 +15,7 @@ test('file picker, source, classes, borderless notes, inheritance and navigation
   await expect(page.locator('path.inherit')).toHaveAttribute('data-source', 'vehicle');
   await expect(page.locator('path.inherit')).toHaveAttribute('data-target', 'car');
   await page.getByRole('button', { name: 'Source' }).click();
-  await expect(page.locator('#source-code')).toContainText('@class::vehicle');
+  await expect(page.locator('#source-code')).toContainText('@class vehicle');
   await page.getByRole('button', { name: 'Close source' }).click();
   await page.getByRole('button', { name: '← All files', exact: true }).click();
   await expect(page.locator('#home')).toBeVisible();
@@ -104,7 +104,7 @@ test('connection loss preserves the view and reconnect catches up with saved cha
 
 test('border defaults, reverse arrows, hollow triangles and clear batch insertion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await writeFile(join(directory, 'test.txt'), '@plain\nSome text\n#from @source\n#use @target\n@source\n#border\n@class::target\n-- value');
+  await writeFile(join(directory, 'test.txt'), '@plain\nSome text\n#from @source\n#use @target\n@source\n#border\n@class target\n-- value');
   await page.goto('/?file=test.txt');
   await expect(page.locator('.node')).toHaveCount(3);
   await expect(page.locator('[data-id="plain"]')).toHaveClass(/none/);
@@ -114,7 +114,7 @@ test('border defaults, reverse arrows, hollow triangles and clear batch insertio
   await expect(page.locator('path.from')).toHaveAttribute('data-target', 'plain');
   await expect(page.locator('path.use')).toHaveAttribute('marker-end', 'url(#triangle)');
   await expect(page.locator('#triangle path')).toHaveAttribute('d', /Z$/);
-  await writeFile(join(directory, 'test.txt'), '@plain\nSome text\n#from @source\n#use @target\n@source\n#border\n@class::target\n-- value' + Array.from({length: 12}, (_, i) => `\n@new${i}\nNew text`).join(''));
+  await writeFile(join(directory, 'test.txt'), '@plain\nSome text\n#from @source\n#use @target\n@source\n#border\n@class target\n-- value' + Array.from({length: 12}, (_, i) => `\n@new${i}\nNew text`).join(''));
   await expect(page.locator('.node')).toHaveCount(15);
   const boxes = await page.locator('.node').evaluateAll(nodes => nodes.map(node => {
     const el = node as HTMLElement, transform = new DOMMatrix(el.style.transform);
@@ -287,7 +287,7 @@ Energy \(E=mc^2\), fraction \(\frac{1}{2}\), root \(\sqrt{x}\), Greek \(\alpha_i
 <img src=x onerror=alert(1)>
 @broken
 Keep \(\frac{1}{\) visible and unmatched \(x.
-@class::Vector
+@class Vector
 -- norm \(\sum_i x_i^2\)`);
   await page.goto('/?file=test.txt');
   await expect(page.locator('.katex')).toHaveCount(5);
@@ -299,7 +299,7 @@ Keep \(\frac{1}{\) visible and unmatched \(x.
   const body = page.locator('[data-id="math"] .node-body');
   await expect(body).toHaveCSS('font-weight','500');
   await expect(body).toHaveCSS('color','rgb(32, 40, 32)');
-  await expect(body).toHaveCSS('width','84px');
+  await expect(body).toHaveCSS('width','82px');
   await page.getByRole('button',{name:'Zoom in'}).click();
   await page.getByRole('button',{name:'Zoom in'}).click();
   await expect(page.locator('.katex')).toHaveCount(5);
@@ -314,7 +314,7 @@ Updated \(x^3\).`);
 
 test('homepage width persists and title spacing leaves reference IDs intact', async ({ page }) => {
   await page.emulateMedia({ reducedMotion:'reduce' });
-  await writeFile(join(directory,'test.txt'), '@first_note\n#to second_note\n@class::second_note\n-- value');
+  await writeFile(join(directory,'test.txt'), '@first_note\n#to second_note\n@class second_note\n-- value');
   await page.goto('/');
   await page.getByLabel('Note width',{exact:true}).fill('180');
   await page.getByLabel('Note width',{exact:true}).press('Tab');
@@ -355,7 +355,7 @@ test('note emphasis supports math, literal HTML, escaped stars and live edits', 
 An *italic phrase* and **bold phrase**; **bold with *italic inside* and \(x^2\)**.
 Literal \*stars\*, unmatched *end, <b>plain HTML</b>.
 Math \(a*b\) stays math.
-@class::Class
+@class Class
 -- **bold attribute**`);
   await page.goto('/?file=test.txt');
   const body=page.locator('[data-id="formatted"] .node-body');
@@ -429,4 +429,162 @@ test('polished layouts stay still on same-size edits and keep fork diagrams comp
   await page.keyboard.press('t'); await page.keyboard.press('f');
   await page.screenshot({path:'test-results/polished-temporal.png'});
   await expect(page.locator('#edge-paths path[data-routing="fallback"]')).toHaveCount(0);
+});
+
+test('attribute arrows track actual row centers after reflow and invalid edits preserve the graph', async ({ page }) => {
+  await page.emulateMedia({reducedMotion:'reduce'});
+  const source='@sender\n#to car 2\n@class car\n-- first\n-- a longer attribute that wraps across several lines\n@receiver\n#from car 1';
+  await writeFile(join(directory,'test.txt'),source);
+  await page.goto('/?file=test.txt');
+  await expect(page.locator('path[data-target-attribute="2"]')).toHaveCount(1);
+  const alignment = () => page.evaluate(() => {
+    const node=document.querySelector<HTMLElement>('[data-id="car"]')!;
+    const world=document.querySelector('#world')!.getBoundingClientRect();
+    const scale=new DOMMatrix(getComputedStyle(document.querySelector('#world')!).transform).a;
+    const errors=[];
+    for(const [selector,rowIndex,atEnd] of [['path[data-target-attribute="2"]',1,true],['path[data-source-attribute="1"]',0,false]] as const) {
+      const path=document.querySelector<SVGPathElement>(selector)!;
+      const p=path.getPointAtLength(atEnd?path.getTotalLength():0);
+      const row=node.querySelectorAll('.attribute')[rowIndex].getBoundingClientRect();
+      errors.push(Math.abs(world.y+p.y*scale-(row.y+row.height/2)));
+    }
+    return Math.max(...errors);
+  });
+  await expect.poll(alignment).toBeLessThan(1);
+  await page.getByLabel('Note font size').selectOption('16');
+  await expect.poll(alignment).toBeLessThan(1);
+  await page.keyboard.press('Tab'); await page.keyboard.press('t');
+  await expect.poll(alignment).toBeLessThan(1);
+  await writeFile(join(directory,'test.txt'),source.replace('#to car 2','#to car 9'));
+  await expect(page.locator('#diagnostics')).toContainText('Attribute 9');
+  await expect(page.locator('path[data-target-attribute="2"]')).toHaveCount(1);
+  await writeFile(join(directory,'test.txt'),source);
+  await expect(page.locator('#diagnostics')).toBeHidden();
+});
+
+test('relative PNGs resize proportionally and retain sizes across reload', async ({ page }) => {
+  const {png}=await import('../png-fixture.js');await writeFile(join(directory,'sketch.png'),png());
+  await writeFile(join(directory,'test.txt'),'@image sketch.png\nA **caption**.');
+  await page.emulateMedia({reducedMotion:'reduce'});await page.goto('/?file=test.txt');
+  const img=page.locator('.note-image'),handle=page.getByRole('button',{name:'Resize image',exact:true});
+  await expect(handle).toBeVisible();await expect(img).toHaveJSProperty('naturalWidth',200);
+  await expect(img).toHaveCSS('width','960px');await expect(img).toHaveCSS('height','480px');
+  await expect(page.locator('.node-body strong')).toHaveText('caption');await page.keyboard.press('f');
+  const h=await handle.boundingBox();await page.mouse.move(h!.x+12,h!.y+12);await page.mouse.down();
+  await page.mouse.move(h!.x-78,h!.y-33,{steps:5});await page.mouse.up();
+  const resized=await img.evaluate(el=>(el as HTMLElement).offsetWidth);expect(resized).toBeLessThan(960);
+  await page.reload();await expect(handle).toBeVisible();await expect.poll(()=>img.evaluate(el=>(el as HTMLElement).offsetWidth)).toBe(resized);
+  await writeFile(join(directory,'test.txt'),'@image missing.png\nMissing image caption.');
+  await expect(page.locator('.image-status')).toContainText('Could not load missing.png');await expect(page.locator('.node-body')).toHaveText('Missing image caption.');
+});
+
+test('boxes nest, intersect, follow dragged notes and preserve the graph on invalid boundaries', async ({ page }) => {
+  await page.emulateMedia({reducedMotion:'reduce'});
+  const source='@boxopen Outer\nA **subtitle**.\n@a\nFirst.\n@boxopen Inner\n@b\nSecond.\n@boxclose Inner\nInner footer.\n@boxopen Overlap\n@c\nThird.\n@boxclose Outer\nOuter footer.\n@d\nFourth.\n@boxclose Overlap';
+  await writeFile(join(directory,'test.txt'),source);await page.goto('/?file=test.txt');
+  await expect(page.locator('.graph-box')).toHaveCount(3);
+  await expect(page.locator('[data-box="Outer"] .box-subtitle strong')).toHaveText('subtitle');
+  await expect(page.locator('[data-box="Inner"] .box-footer')).toHaveText('Inner footer.');
+  const contains = () => page.evaluate(()=>{
+    const outer=document.querySelector('[data-box="Outer"]')!.getBoundingClientRect();
+    const inner=document.querySelector('[data-box="Inner"]')!.getBoundingClientRect();
+    return outer.x<inner.x && outer.y<inner.y && outer.right>inner.right && outer.bottom>inner.bottom;
+  });
+  await expect.poll(contains).toBeTruthy();
+  await page.keyboard.press('f');
+  const node=page.locator('[data-id="b"]');const n=await node.boundingBox();
+  await page.mouse.move(n!.x+n!.width/2,n!.y+n!.height/2);await page.mouse.down();await page.mouse.move(n!.x+n!.width/2+60,n!.y+n!.height/2+50);await page.mouse.up();
+  await expect.poll(contains).toBeTruthy();
+  await page.keyboard.press('t');await expect.poll(contains).toBeTruthy();
+  await page.keyboard.press('f');await page.screenshot({path:'test-results/boxes.png'});
+  await writeFile(join(directory,'test.txt'),source.replace('@boxclose Outer','@boxclose missing'));
+  await expect(page.locator('#diagnostics')).toContainText('not open');await expect(page.locator('.graph-box')).toHaveCount(3);
+});
+
+test('adding boxes live separates their frames in spatial and temporal views',async({page})=>{
+  await page.emulateMedia({reducedMotion:'reduce'});
+  const notes='@a\nFirst\n#to c\n@b\nSecond\n#to d\n@c\nThird\n@d\nFourth';
+  await writeFile(join(directory,'test.txt'),notes);await page.goto('/?file=test.txt');
+  await expect(page.locator('.node')).toHaveCount(4);
+  await writeFile(join(directory,'test.txt'),'@boxopen A\n'+notes.replace('@c\n','@boxclose A\n@boxopen B\n@c\n')+'\n@boxclose B');
+  await expect(page.locator('.graph-box')).toHaveCount(2);
+  const separated=()=>page.evaluate(()=>{
+    const a=document.querySelector('[data-box="A"]')!.getBoundingClientRect(),b=document.querySelector('[data-box="B"]')!.getBoundingClientRect();
+    return a.right<=b.left || b.right<=a.left || a.bottom<=b.top || b.bottom<=a.top;
+  });
+  await expect.poll(separated).toBeTruthy();
+  await page.keyboard.press('t');await expect.poll(separated).toBeTruthy();
+  await expect.poll(()=>page.locator('.node').evaluateAll(nodes=>{
+    const boxes=nodes.map(n=>n.getBoundingClientRect());
+    return boxes.every((a,i)=>boxes.every((b,j)=>i===j || a.right<=b.left || b.right<=a.left || a.bottom<=b.top || b.bottom<=a.top));
+  })).toBeTruthy();
+  await page.keyboard.press('f');await page.screenshot({path:'test-results/box-spacing.png'});
+});
+
+test('refined notes keep readable spacing and grouped geometry in both themes',async({page})=>{
+  await page.emulateMedia({reducedMotion:'reduce',colorScheme:'light'});
+  await page.addInitScript(()=>localStorage.setItem('files0:note-width','220'));
+  const source='@boxopen Research\nA question, two ways to explore it.\n@question\nWhat makes an idea useful?\nStart with a **clear question**.\nLeave room to think.\n#to observation\n#to experiment\n@observation\nNotice the patterns.\nRecord what stays the same.\n#to synthesis\n@experiment\nChange one thing.\nLook for a *meaningful difference*.\n#to synthesis\n@synthesis\nConnect what you learned.\nKeep the next step simple.\n@boxclose Research\nSmall steps, made visible.';
+  await writeFile(join(directory,'test.txt'),source);await page.goto('/?file=test.txt');
+  await expect(page.locator('.node')).toHaveCount(4);
+  const body=page.locator('[data-id="question"] .node-body');
+  expect(await body.evaluate(el=>parseFloat(getComputedStyle(el).lineHeight)/parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(1.85);
+  await page.keyboard.press('t');
+  const clear=()=>page.locator('.node').evaluateAll(nodes=>{
+    const boxes=nodes.map(n=>n.getBoundingClientRect());
+    return boxes.every((a,i)=>boxes.every((b,j)=>i===j || a.right<=b.left || b.right<=a.left || a.bottom<=b.top || b.bottom<=a.top));
+  });
+  await expect.poll(clear).toBeTruthy();
+  await expect(page.locator('#edge-paths path[data-routing="fallback"]')).toHaveCount(0);
+  await page.keyboard.press('f');
+  await page.screenshot({path:'test-results/polish-light.png'});
+  await page.getByRole('button',{name:'Switch to dark mode'}).click();
+  await page.screenshot({path:'test-results/polish-dark.png'});
+  await page.getByLabel('Note font size').selectOption('18');
+  await expect.poll(clear).toBeTruthy();
+});
+
+test('row-to-row arrows stay attached at both ends through live edits and layouts',async({page})=>{
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.addInitScript(()=>localStorage.setItem('files0:note-width','220'));
+  const source='@boxopen System\nAttribute dependencies\n@class engine\n-- power\n-- speed with a longer description that wraps\n#to @dashboard 2 #from 1\n@class dashboard\n-- speed display\n-- power display\n#from @engine 2 #to 1\n@boxclose System';
+  await writeFile(join(directory,'test.txt'),source);await page.goto('/?file=test.txt');
+  await expect(page.locator('[data-id="engine"] .attribute')).toHaveCount(2);
+  const paths=page.locator('#edge-paths path');await expect(paths).toHaveCount(2);
+  await expect(page.locator('#edge-paths path[data-source-attribute][data-target-attribute]')).toHaveCount(2);
+  const alignment=()=>page.evaluate(()=>{
+    const errors:number[]=[];
+    for(const path of document.querySelectorAll<SVGPathElement>('#edge-paths path')) {
+      for(const end of ['source','target'] as const) {
+        const index=Number(path.dataset[end+'Attribute']);
+        const row=document.querySelector(`[data-id="${path.dataset[end]}"]`)!.querySelectorAll('.attribute')[index-1].getBoundingClientRect();
+        const p=path.getPointAtLength(end==='target'?path.getTotalLength():0).matrixTransform(path.getScreenCTM()!);
+        errors.push(Math.abs(p.y-row.y-row.height/2));
+      }
+    }
+    return Math.max(...errors);
+  });
+  await expect.poll(alignment).toBeLessThan(1);
+  await page.getByLabel('Note font size').selectOption('16');await expect.poll(alignment).toBeLessThan(1);
+  await page.keyboard.press('Tab');await page.keyboard.press('t');await expect.poll(alignment).toBeLessThan(1);
+  await page.keyboard.press('f');await page.screenshot({path:'test-results/attribute-pairs.png'});
+  for(const invalid of [source.replace('#from 1','#from 9'),source.replace('#to @dashboard 2','#to @dashboard 9')]) {
+    await writeFile(join(directory,'test.txt'),invalid);
+    await expect(page.locator('#diagnostics')).toContainText('Attribute 9');await expect(paths).toHaveCount(2);
+    await writeFile(join(directory,'test.txt'),source);await expect(page.locator('#diagnostics')).toBeHidden();
+  }
+});
+
+test('with renders a plain connection and live changes restore arrowheads',async({page})=>{
+  await page.emulateMedia({reducedMotion:'reduce'});
+  const source='@left\nA thought.\n#with @right\n@right\nA related thought.\n#with @left';
+  await writeFile(join(directory,'test.txt'),source);await page.goto('/?file=test.txt');
+  const path=page.locator('#edge-paths path.with');await expect(path).toHaveCount(1);
+  await expect(path).not.toHaveAttribute('marker-end',/./);await expect(path).not.toHaveAttribute('marker-start',/./);
+  await expect(path.locator('title')).toHaveText('left — right');
+  await expect(page.locator('[data-id="right"]')).toHaveAttribute('aria-label',/connected to left/);
+  await page.keyboard.press('t');await expect(path).toHaveCount(1);
+  await writeFile(join(directory,'test.txt'),source.replace('#with @right','#to @right').replace('\n#with @left',''));
+  await expect(page.locator('#edge-paths path.to')).toHaveAttribute('marker-end','url(#arrow)');
+  await expect(path).toHaveCount(0);
 });

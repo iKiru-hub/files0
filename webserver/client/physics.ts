@@ -1,3 +1,4 @@
+import { arrangeGroups } from './group-layout.js';
 import type { Graph } from '../compiler.js';
 import { MIN_NODE_GAP, type Box, type Point } from './layout.js';
 
@@ -11,13 +12,16 @@ export function neighbourhoods(graph: Graph): Map<string, Set<string>> {
 }
 
 /** A bounded, cooled force solve. The renderer animates the resulting equilibrium. */
-export function equilibrate(graph: Graph, boxes: Map<string, Box>, held?: string): Map<string, Point> {
+export function equilibrate(graph: Graph, boxes: Map<string, Box>, held?: string, nodeGap = MIN_NODE_GAP): Map<string, Point> {
   const ids = graph.nodes.map(n => n.id).filter(id => boxes.has(id));
   if (!ids.length) return new Map();
   const bodies = ids.map(id => ({ ...boxes.get(id)!, vx: 0, vy: 0 }));
   const adjacent = neighbourhoods(graph);
+  const memberships = new Map(ids.map(id=>[id,(graph.groups||[]).filter(g=>g.members.includes(id))]));
+  const shared = (a:string,b:string) => memberships.get(a)!.some(g=>g.members.includes(b));
   const relations = ids.map((id, i) => ids.map((other, j) => {
     if (i === j) return 0;
+    if (shared(id,other)) return 3;
     if (adjacent.get(id)?.has(other)) return 2;
     return [...(adjacent.get(id) || [])].some(mid => adjacent.get(mid)?.has(other)) ? 1 : 0;
   }));
@@ -35,17 +39,18 @@ export function equilibrate(graph: Graph, boxes: Map<string, Box>, held?: string
       const clearance = Math.min((a.width + b.width) / 2 / (Math.abs(ux) || .0001),
         (a.height + b.height) / 2 / (Math.abs(uy) || .0001));
       const relation = relations[i][j];
-      const rest = clearance + MIN_NODE_GAP + (relation === 2 ? 14 : 65);
-      // A direct edge pulls hardest; distance-two neighbours have a weaker spring.
-      const strength = relation === 2 ? .045 / Math.sqrt(Math.max(1, Math.min(adjacent.get(ids[i])!.size, adjacent.get(ids[j])!.size))) : .006;
-      const attraction = relation ? (distance - rest) * strength : 0;
+      const rest = clearance + nodeGap + (relation === 3 ? 4 : relation === 2 ? 14 : 65);
+      // Membership wins over arrows: crossing a box boundary weakens a spring.
+      const strength = relation === 3 ? .14 / Math.sqrt(Math.max(1, Math.min(...memberships.get(ids[i])!.filter(g=>g.members.includes(ids[j])).map(g=>g.members.length))/2)) : relation === 2 ? .045 / Math.sqrt(Math.max(1, Math.min(adjacent.get(ids[i])!.size, adjacent.get(ids[j])!.size))) : .006;
+      const crossesBox = relation !== 3 && (memberships.get(ids[i])!.length || memberships.get(ids[j])!.length);
+      const attraction = relation ? (distance - rest) * strength * (crossesBox ? .2 : 1) : 0;
       const reach = Math.max(0, 1 - Math.max(0, distance-clearance) / 260);
       const repulsion = (relation ? 600 : 3600) * reach / Math.max(60, distance) ** 2;
       const force = attraction - repulsion;
       forces[i].x += ux * force; forces[i].y += uy * force;
       forces[j].x -= ux * force; forces[j].y -= uy * force;
-      const ox = (a.width + b.width) / 2 + MIN_NODE_GAP + 5 - Math.abs(dx);
-      const oy = (a.height + b.height) / 2 + MIN_NODE_GAP + 5 - Math.abs(dy);
+      const ox = (a.width + b.width) / 2 + nodeGap + 5 - Math.abs(dx);
+      const oy = (a.height + b.height) / 2 + nodeGap + 5 - Math.abs(dy);
       if (ox > 0 && oy > 0) {
         if (ox < oy) { const push = (Math.sign(dx) || 1) * ox * .18; forces[i].x -= push; forces[j].x += push; }
         else { const push = (Math.sign(dy) || 1) * oy * .18; forces[i].y -= push; forces[j].y += push; }
@@ -65,8 +70,8 @@ export function equilibrate(graph: Graph, boxes: Map<string, Box>, held?: string
     for (let i = 0; i < bodies.length; i++) for (let j = i+1; j < bodies.length; j++) {
       const a=bodies[i], b=bodies[j];
       const dx=b.x+b.width/2-a.x-a.width/2, dy=b.y+b.height/2-a.y-a.height/2;
-      const ox=(a.width+b.width)/2+MIN_NODE_GAP+.01-Math.abs(dx);
-      const oy=(a.height+b.height)/2+MIN_NODE_GAP+.01-Math.abs(dy);
+      const ox=(a.width+b.width)/2+nodeGap+.01-Math.abs(dx);
+      const oy=(a.height+b.height)/2+nodeGap+.01-Math.abs(dy);
       if (ox<=0 || oy<=0) continue;
       overlaps=true;
       const shareA=ids[i]===held?0:ids[j]===held?1:.5, shareB=1-shareA;
@@ -79,16 +84,16 @@ export function equilibrate(graph: Graph, boxes: Map<string, Box>, held?: string
   const occupied: Box[] = [], result = new Map<string, Point>();
   const order = ids.map((id, i) => ({ id, box: bodies[i] })).sort((a,b)=>Number(b.id===held)-Number(a.id===held));
   for (const {id,box} of order) {
-    const clear=(p:Point)=>occupied.every(b=>p.x+box.width+MIN_NODE_GAP<=b.x || b.x+b.width+MIN_NODE_GAP<=p.x || p.y+box.height+MIN_NODE_GAP<=b.y || b.y+b.height+MIN_NODE_GAP<=p.y);
+    const clear=(p:Point)=>occupied.every(b=>p.x+box.width+nodeGap<=b.x || b.x+b.width+nodeGap<=p.x || p.y+box.height+nodeGap<=b.y || b.y+b.height+nodeGap<=p.y);
     let p={x:box.x,y:box.y};
     if (!clear(p)) {
       const candidates=occupied.flatMap(b=>[
-        {x:b.x-box.width-MIN_NODE_GAP,y:box.y}, {x:b.x+b.width+MIN_NODE_GAP,y:box.y},
-        {x:box.x,y:b.y-box.height-MIN_NODE_GAP}, {x:box.x,y:b.y+b.height+MIN_NODE_GAP}]);
+        {x:b.x-box.width-nodeGap,y:box.y}, {x:b.x+b.width+nodeGap,y:box.y},
+        {x:box.x,y:b.y-box.height-nodeGap}, {x:box.x,y:b.y+b.height+nodeGap}]);
       candidates.sort((a,b)=>Math.hypot(a.x-box.x,a.y-box.y)-Math.hypot(b.x-box.x,b.y-box.y));
       p=candidates.find(clear)!;
     }
     result.set(id,p); occupied.push({...box,...p});
   }
-  return result;
+  return arrangeGroups(graph,boxes,result,held,false,undefined,nodeGap);
 }

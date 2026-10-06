@@ -1,12 +1,31 @@
 import type { Graph, Edge } from '../compiler.js';
 import type { Box, Point } from './layout.js';
+import { groupBounds } from './groups.js';
 export interface Route { points: Point[]; path: string; crossings: number }
 interface Segment { a: Point; b: Point }
-const PAD = 18, GAP = 7, EPS = .001;
+const PAD = 24, GAP = 9, EPS = .001;
 const CROSSING_COST = 500;
+export const EDGE_SPACING = 18;
 const distance = (a: Point, b: Point) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+const length = (a: Point, b: Point) => Math.hypot(a.x-b.x, a.y-b.y);
 const segments = (p: Point[]): Segment[] => p.slice(1).map((b, i) => ({ a: p[i], b }));
 const same = (a: Point, b: Point) => distance(a, b) < EPS;
+
+/** A soft corridor around long, nearly parallel segments. Short shared stems
+ * at an exact attribute anchor are allowed to fan out naturally. */
+export function parallelCrowding(a: Point, b: Point, c: Point, d: Point): number {
+  const size=length(a,b), other=length(c,d);
+  if(size<24 || other<24) return 0;
+  const ux=(b.x-a.x)/size,uy=(b.y-a.y)/size;
+  const projection=(p:Point)=>(p.x-a.x)*ux+(p.y-a.y)*uy;
+  const start=projection(c),end=projection(d);
+  if(Math.abs(end-start)/other<.97) return 0;
+  const low=Math.max(0,Math.min(start,end)),high=Math.min(size,Math.max(start,end));
+  if(high-low<24) return 0;
+  const t=((low+high)/2-start)/(end-start);
+  const separation=Math.abs((c.x+(d.x-c.x)*t-a.x)*uy-(c.y+(d.y-c.y)*t-a.y)*ux);
+  return Math.min(160,high-low)*4*Math.max(0,1-separation/EDGE_SPACING)**2;
+}
 
 export function hitsBox(a: Point, b: Point, box: Box, pad = 0): boolean {
   // Clip against the open interior of the rectangle, for any segment angle.
@@ -41,8 +60,23 @@ export function intersects(a: Point, b: Point, c: Point, d: Point): boolean {
   return !((t < EPS || t > 1-EPS) && (u < EPS || u > 1-EPS));
 }
 
-function straight(a: Box, b: Box): Point[] {
+function rowY(box: Box, index?: number): number | undefined {
+  const center = index === undefined ? undefined : box.attributeCenters?.[index - 1];
+  return center === undefined ? undefined : box.y + center;
+}
+function straight(a: Box, b: Box, sourceRow?: number, targetRow?: number): Point[] {
   const ac = {x:a.x+a.width/2,y:a.y+a.height/2}, bc = {x:b.x+b.width/2,y:b.y+b.height/2};
+  if (sourceRow !== undefined || targetRow !== undefined) {
+    const side = bc.x >= ac.x ? 1 : -1;
+    const source = sourceRow === undefined ? undefined : {x:ac.x+side*(a.width/2+GAP),y:sourceRow};
+    const target = targetRow === undefined ? undefined : {x:bc.x-side*(b.width/2+GAP),y:targetRow};
+    const clip = (box:Box, center:Point, toward:Point) => {
+      const dx=toward.x-center.x,dy=toward.y-center.y;
+      const t=Math.min(dx?(box.width/2+GAP)/Math.abs(dx):Infinity,dy?(box.height/2+GAP)/Math.abs(dy):Infinity);
+      return {x:center.x+dx*t,y:center.y+dy*t};
+    };
+    return [source || clip(a,ac,target!),target || clip(b,bc,source!)];
+  }
   const dx = bc.x-ac.x, dy = bc.y-ac.y, length = Math.hypot(dx,dy);
   if (length < EPS) return [];
   const tip = (box: Box, center: Point, direction: number) => {
@@ -71,14 +105,18 @@ export function roundedPath(points: Point[]): string {
   let path = `M ${points[0].x} ${points[0].y}`;
   for (let i = 1; i < points.length - 1; i++) {
     const a = points[i-1], b = points[i], c = points[i+1];
-    const r = Math.min(10, Math.hypot(a.x-b.x,a.y-b.y)/2, Math.hypot(c.x-b.x,c.y-b.y)/2);
+    const r = Math.min(12, Math.hypot(a.x-b.x,a.y-b.y)/2, Math.hypot(c.x-b.x,c.y-b.y)/2);
     const before = { x:b.x+(a.x-b.x)*r/(Math.hypot(a.x-b.x,a.y-b.y)||1), y:b.y+(a.y-b.y)*r/(Math.hypot(a.x-b.x,a.y-b.y)||1) };
     const after = { x:b.x+(c.x-b.x)*r/(Math.hypot(c.x-b.x,c.y-b.y)||1), y:b.y+(c.y-b.y)*r/(Math.hypot(c.x-b.x,c.y-b.y)||1) };
     path += ` L ${before.x} ${before.y} Q ${b.x} ${b.y} ${after.x} ${after.y}`;
   }
   const end = points[points.length-1]; return path + ` L ${end.x} ${end.y}`;
 }
-function ports(box: Box, slot: number) {
+function ports(box: Box, slot: number, row?: number) {
+  if (row !== undefined) return [
+    [{x:box.x+box.width+GAP,y:row},{x:box.x+box.width+PAD,y:row}],
+    [{x:box.x-GAP,y:row},{x:box.x-PAD,y:row}]
+  ];
   const x = box.x + box.width/2 + slot*Math.min(20,box.width/4), y = box.y + box.height/2 + slot*Math.min(20,box.height/4);
   return [
     [{x:box.x+box.width+GAP,y},{x:box.x+box.width+PAD,y}],
@@ -87,18 +125,32 @@ function ports(box: Box, slot: number) {
     [{x,y:box.y+box.height+GAP},{x,y:box.y+box.height+PAD}]
   ];
 }
-function cost(points: Point[], boxes: Map<string, Box>, edge: Edge, existing: Segment[]): number {
+function cost(points: Point[], boxes: Map<string, Box>, edge: Edge, existing: Segment[], borders: Segment[]): number {
   const lines = segments(points);
-  let value = lines.reduce((n,s) => n+distance(s.a,s.b),0) + Math.max(0, points.length-2)*32;
+  let value = lines.reduce((n,s) => n+length(s.a,s.b),0) + Math.max(0, points.length-2)*40;
+  // Penalize hairpins and backtracking; a short, gentle detour reads better
+  // than a zigzag with the same Manhattan distance.
+  for (let i=1; i<lines.length; i++) {
+    const prev=lines[i-1], next=lines[i];
+    const cosine=((prev.b.x-prev.a.x)*(next.b.x-next.a.x)+(prev.b.y-prev.a.y)*(next.b.y-next.a.y)) /
+      (length(prev.a,prev.b)*length(next.a,next.b) || 1);
+    value += (1-cosine)*20 + Math.max(0,-cosine)*100;
+  }
   for (let i=0; i<lines.length; i++) {
     const s=lines[i];
     for (const [id,box] of boxes) {
       if ((i===0 && id===edge.source) || (i===lines.length-1 && id===edge.target)) continue;
-      // Curved corners stay inside the 16px routing corridor, outside the 8px guard.
+      // Curved corners stay within the padded routing corridor, outside the text guard.
       if (hitsBox(s.a,s.b,box,8)) return Infinity;
     }
     for (let j=0; j<i-1; j++) if (intersects(s.a,s.b,lines[j].a,lines[j].b)) return Infinity;
-    for (const other of existing) if (intersects(s.a,s.b,other.a,other.b)) value += CROSSING_COST;
+    for (const other of existing) {
+      if (intersects(s.a,s.b,other.a,other.b)) value += CROSSING_COST;
+      value += parallelCrowding(s.a,s.b,other.a,other.b);
+    }
+    // Crossing a container boundary is meaningful; following it too closely
+    // makes an edge look like part of the frame instead of a dependency.
+    for (const border of borders) value += parallelCrowding(s.a,s.b,border.a,border.b);
   }
   return value;
 }
@@ -127,8 +179,10 @@ function search(start: Point, end: Point, boxes: Box[]): Point[] | undefined {
   }
 }
 
-export function routeEdges(graph: Graph, boxes: Map<string, Box>): Map<string, Route> {
+export function routeEdges(graph: Graph, boxes: Map<string, Box>, frames=[...groupBounds(graph.groups||[],boxes,new Map()).values()].map(b=>b.frame)): Map<string, Route> {
   const routed=new Map<string,Route>(), existing: Segment[]=[];
+  const borders=frames.flatMap(b=>segments([{x:b.x,y:b.y},{x:b.x+b.width,y:b.y},
+    {x:b.x+b.width,y:b.y+b.height},{x:b.x,y:b.y+b.height},{x:b.x,y:b.y}]));
   const all=[...boxes.values()];if(!all.length)return routed;
   const bounds={left:Math.min(...all.map(b=>b.x))-40,right:Math.max(...all.map(b=>b.x+b.width))+40,
     top:Math.min(...all.map(b=>b.y))-40,bottom:Math.max(...all.map(b=>b.y+b.height))+40};
@@ -143,19 +197,21 @@ export function routeEdges(graph: Graph, boxes: Map<string, Box>): Map<string, R
     const a=boxes.get(edge.source),b=boxes.get(edge.target);if(!a||!b)continue;
     // Try the center-to-center line first, including diagonals. Bend only
     // when another note or an already routed connection obstructs it.
-    const direct = edge.source === edge.target ? [] : straight(a,b);
-    if (direct.length && ![...boxes].some(([id,box]) => id !== edge.source && id !== edge.target && hitsBox(direct[0],direct[1],box,8)) &&
-        !existing.some(segment => intersects(direct[0],direct[1],segment.a,segment.b))) {
+    const sourceRow=rowY(a,edge.sourceAttribute), targetRow=rowY(b,edge.targetAttribute);
+    const direct = edge.source === edge.target ? [] : straight(a,b,sourceRow,targetRow);
+    if (direct.length && !hitsBox(direct[0],direct[1],a) && !hitsBox(direct[0],direct[1],b) && ![...boxes].some(([id,box]) => id !== edge.source && id !== edge.target && hitsBox(direct[0],direct[1],box,8)) &&
+        !existing.some(segment => intersects(direct[0],direct[1],segment.a,segment.b) || parallelCrowding(direct[0],direct[1],segment.a,segment.b)>0) &&
+        !borders.some(segment=>parallelCrowding(direct[0],direct[1],segment.a,segment.b)>0)) {
       routed.set(edge.id,{points:direct,path:roundedPath(direct),crossings:0});
       existing.push(...segments(direct)); continue;
     }
-    const pairs=ports(a,slot(edge.source,edge.id)).flatMap(s=>ports(b,slot(edge.target,edge.id)).map(t=>({s,t})));
+    const pairs=ports(a,slot(edge.source,edge.id),sourceRow).flatMap(s=>ports(b,slot(edge.target,edge.id),targetRow).map(t=>({s,t})));
     pairs.sort((p,q)=>distance(p.s[1],p.t[1])-distance(q.s[1],q.t[1]));
     let winner:Point[]|undefined,best=Infinity;
-    const evaluate=(raw:Point[])=>{const points=simplify(raw);const score=cost(points,boxes,edge,existing);if(score<best){best=score;winner=points;}};
+    const evaluate=(raw:Point[])=>{const points=simplify(raw);const score=cost(points,boxes,edge,existing,borders);if(score<best){best=score;winner=points;}};
     // Compact diagonal bends around nearby obstacles precede orthogonal detours.
     // A modest crossing cost prevents a single intersection creating a huge loop.
-    if (direct.length) evaluate(direct);
+    if (direct.length && !hitsBox(direct[0],direct[1],a) && !hitsBox(direct[0],direct[1],b)) evaluate(direct);
     const boundary=(box:Box,toward:Point)=>{
       const center={x:box.x+box.width/2,y:box.y+box.height/2};
       const dx=toward.x-center.x,dy=toward.y-center.y;
@@ -163,7 +219,7 @@ export function routeEdges(graph: Graph, boxes: Map<string, Box>): Map<string, R
       return {x:center.x+dx*t,y:center.y+dy*t};
     };
     const via=(middle:Point[])=>evaluate([boundary(a,middle[0]),...middle,boundary(b,middle[middle.length-1])]);
-    if(edge.source!==edge.target) {
+    if(edge.source!==edge.target && sourceRow === undefined && targetRow === undefined) {
       const ac={x:a.x+a.width/2,y:a.y+a.height/2},bc={x:b.x+b.width/2,y:b.y+b.height/2};
       const dx=bc.x-ac.x,dy=bc.y-ac.y,length=Math.hypot(dx,dy)||1;
       for(const offset of [24,-24,48,-48,80,-80,120,-120]) {
@@ -181,8 +237,12 @@ export function routeEdges(graph: Graph, boxes: Map<string, Box>): Map<string, R
       if(edge.source===edge.target && same(s[0],t[0]))continue;
       const start=s[1],end=t[1];
       const nearest=(values:number[],mid:number)=>[...new Set(values)].sort((x,y)=>Math.abs(x-mid)-Math.abs(y-mid)).slice(0,12);
-      const xs=nearest(all.flatMap(box=>[box.x-PAD,box.x+box.width+PAD]),(start.x+end.x)/2);
-      const ys=nearest(all.flatMap(box=>[box.y-PAD,box.y+box.height+PAD]),(start.y+end.y)/2);
+      const xs=nearest([...all.flatMap(box=>[box.x-PAD,box.x+box.width+PAD]),
+        ...existing.filter(s=>Math.abs(s.a.x-s.b.x)<EPS).flatMap(s=>[s.a.x-EDGE_SPACING,s.a.x+EDGE_SPACING]),
+        ...frames.flatMap(f=>[f.x-PAD,f.x+PAD,f.x+f.width-PAD,f.x+f.width+PAD])],(start.x+end.x)/2);
+      const ys=nearest([...all.flatMap(box=>[box.y-PAD,box.y+box.height+PAD]),
+        ...existing.filter(s=>Math.abs(s.a.y-s.b.y)<EPS).flatMap(s=>[s.a.y-EDGE_SPACING,s.a.y+EDGE_SPACING]),
+        ...frames.flatMap(f=>[f.y-PAD,f.y+PAD,f.y+f.height-PAD,f.y+f.height+PAD])],(start.y+end.y)/2);
       xs.push((start.x+end.x)/2,bounds.left-(routed.size % 6)*6,bounds.right+(routed.size % 6)*6);
       ys.push((start.y+end.y)/2,bounds.top-(routed.size % 6)*6,bounds.bottom+(routed.size % 6)*6);
       const attempt=(middle:Point[])=>evaluate([s[0],start,...middle,end,t[0]]);
